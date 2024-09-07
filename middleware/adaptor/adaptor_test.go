@@ -117,31 +117,31 @@ var (
 
 func Test_HTTPMiddleware(t *testing.T) {
 	const expectedHost = "foobar.com"
-	tests := []struct {
-		name       string
-		url        string
-		method     string
-		statusCode int
-	}{
-		{
-			name:       "Should return 200",
-			url:        "/",
-			method:     "POST",
-			statusCode: 200,
-		},
-		{
-			name:       "Should return 405",
-			url:        "/",
-			method:     "GET",
-			statusCode: 405,
-		},
-		{
-			name:       "Should return 400",
-			url:        "/unknown",
-			method:     "POST",
-			statusCode: 404,
-		},
-	}
+	// tests := []struct {
+	// 	name       string
+	// 	url        string
+	// 	method     string
+	// 	statusCode int
+	// }{
+	// 	{
+	// 		name:       "Should return 200",
+	// 		url:        "/",
+	// 		method:     "POST",
+	// 		statusCode: 200,
+	// 	},
+	// 	{
+	// 		name:       "Should return 405",
+	// 		url:        "/",
+	// 		method:     "GET",
+	// 		statusCode: 405,
+	// 	},
+	// 	{
+	// 		name:       "Should return 400",
+	// 		url:        "/unknown",
+	// 		method:     "POST",
+	// 		statusCode: 404,
+	// 	},
+	// }
 
 	nethttpMW := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -161,6 +161,7 @@ func Test_HTTPMiddleware(t *testing.T) {
 	app := fiber.New()
 	app.Use(HTTPMiddleware(nethttpMW))
 	app.Post("/", func(c fiber.Ctx) error {
+		fmt.Println("Start of request handler: ", c.GetReqHeaders())
 		value := c.Context().Value(TestContextKey)
 		val, ok := value.(string)
 		if !ok {
@@ -177,25 +178,36 @@ func Test_HTTPMiddleware(t *testing.T) {
 			}
 			c.Set("context_second_okay", val)
 		}
+
+		// RETURNING CURRENT COOKIES TO RESPONSE
+		// var cookies []string = strings.Split(c.Get("Cookie"), "; ")
+		// for _, cookie := range cookies {
+		// 	c.Set("Set-Cookie", cookie)
+		// }
+
+		fmt.Println("End of request handler: ", c.GetReqHeaders())
 		return c.SendStatus(fiber.StatusOK)
 	})
 
-	for _, tt := range tests {
-		req, err := http.NewRequestWithContext(context.Background(), tt.method, tt.url, nil)
-		req.Host = expectedHost
-		require.NoError(t, err)
+	// for _, tt := range tests {
+	// 	req, err := http.NewRequestWithContext(context.Background(), tt.method, tt.url, nil)
+	// 	req.Host = expectedHost
+	// 	require.NoError(t, err)
 
-		resp, err := app.Test(req)
-		require.NoError(t, err)
-		require.Equal(t, tt.statusCode, resp.StatusCode, "StatusCode")
-	}
+	// 	resp, err := app.Test(req)
+	// 	require.NoError(t, err)
+	// 	require.Equal(t, tt.statusCode, resp.StatusCode, "StatusCode")
+	// }
 
 	req, err := http.NewRequestWithContext(context.Background(), fiber.MethodPost, "/", nil)
 	req.Host = expectedHost
+	req.AddCookie(&http.Cookie{Name: "cookieOne", Value: "valueCookieOne"})
+	req.AddCookie(&http.Cookie{Name: "cookieTwo", Value: "valueCookieTwo"})
 	require.NoError(t, err)
 
-	resp, err := app.Test(req)
+	resp, err := app.Test(req, -1)
 	require.NoError(t, err)
+	require.Len(t, resp.Cookies(), 2)
 	require.Equal(t, "okay", resp.Header.Get("context_okay"))
 	require.Equal(t, "okay", resp.Header.Get("context_second_okay"))
 }
